@@ -15,17 +15,14 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      # ==========================================
-      # 1. Checkout your Windows-developed project
-      # ==========================================
+      # 1. Download project and its submodules
       - name: Checkout Project
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          submodules: recursive
 
-      # ==========================================
-      # 2. Checkout official GoldHEN SDK
-      # ==========================================
+      # 2. Download the actual GoldHEN SDK
       - name: Checkout GoldHEN SDK
         uses: actions/checkout@v4
         with:
@@ -34,26 +31,22 @@ jobs:
           path: GoldHEN_Plugins_SDK
           fetch-depth: 1
 
-      # ==========================================
-      # 3. Verify all required files
-      # ==========================================
-      - name: Verify Project And SDK
+      # 3. Verify repository layout
+      - name: Verify Build Files
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "========== PROJECT =========="
-
+          echo "===== PROJECT ====="
           pwd
           ls -la
 
-          if [ ! -f Makefile ]; then
-            echo "::error::Project Makefile is missing."
+          test -f Makefile || {
+            echo "::error::Root Makefile is missing."
             exit 1
-          fi
+          }
 
-          echo "========== GOLDHEN SDK =========="
-
+          echo "===== GOLDHEN SDK ====="
           ls -la GoldHEN_Plugins_SDK
 
           test -f GoldHEN_Plugins_SDK/Makefile
@@ -61,34 +54,37 @@ jobs:
           test -d GoldHEN_Plugins_SDK/include
           test -d GoldHEN_Plugins_SDK/source
 
-          echo "Project and SDK checks passed."
+          echo "===== PLUGIN SOURCES ====="
+          if [ -d plugin_src ]; then
+            find plugin_src -maxdepth 3 -type f \
+              \( -name Makefile -o -name '*.c' -o -name '*.cpp' \) \
+              -print
+          else
+            echo "No plugin_src directory; checking project-specific Makefile."
+          fi
 
-      # ==========================================
-      # 4. Pull the official OpenOrbis container
-      # ==========================================
+      # 4. Install the official OpenOrbis container
       - name: Pull OpenOrbis Toolchain
-        run: |
-          docker pull openorbisofficial/toolchain:latest
+        run: docker pull openorbisofficial/toolchain:latest
 
-      # ==========================================
-      # 5. Build SDK and project inside container
-      # ==========================================
-      - name: Build PRX
+      # 5. Build using the official toolchain
+      - name: Compile PRX
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
 
           docker run --rm \
             --user 0:0 \
             --workdir /workspace \
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --env GOLDHEN_SDK=/workspace/GoldHEN_Plugins_SDK \
+            --env OO_PS4_TOOLCHAIN=/lib/OpenOrbisSDK \
             openorbisofficial/toolchain:latest \
             bash -Eeuo pipefail -c '
 
-              echo "========== OPENORBIS =========="
+              echo "===== TOOLCHAIN CHECK ====="
 
-              : "${OO_PS4_TOOLCHAIN:?OpenOrbis toolchain is not configured}"
+              : "${OO_PS4_TOOLCHAIN:?Missing OpenOrbis SDK}"
 
               test -f "$OO_PS4_TOOLCHAIN/link.x"
               test -d "$OO_PS4_TOOLCHAIN/include"
@@ -99,119 +95,93 @@ jobs:
               ld.lld --version
               llvm-ar --version
 
-              echo "========== GOLDHEN =========="
+              echo "===== GOLDHEN CHECK ====="
 
-              : "${GOLDHEN_SDK:?GoldHEN SDK path is missing}"
+              : "${GOLDHEN_SDK:?Missing GoldHEN SDK}"
 
               test -f "$GOLDHEN_SDK/Makefile"
+              test -f "$GOLDHEN_SDK/crt/crtprx.c"
 
-              echo "SDK: $GOLDHEN_SDK"
+              echo "GoldHEN SDK: $GOLDHEN_SDK"
+              echo "OpenOrbis: $OO_PS4_TOOLCHAIN"
 
-              echo "========== BUILD GOLDHEN SDK =========="
+              echo "===== PROJECT MAKEFILE ====="
 
-              make -C "$GOLDHEN_SDK" clean
+              sed -n "1,220p" Makefile
 
-              make -C "$GOLDHEN_SDK" \
-                PRINTF=1 \
-                DEBUGFLAGS=1
-
-              if [ ! -s "$GOLDHEN_SDK/libGoldHEN_Hook.a" ]; then
-                echo "GoldHEN static library was not generated."
-                exit 1
-              fi
-
-              echo "GoldHEN SDK build successful."
-
-              echo "========== PROJECT MAKEFILE =========="
-
-              test -f /workspace/Makefile
-
-              echo "========== BUILD PROJECT =========="
+              echo "===== COMPILATION ====="
 
               make --trace -j1
 
-              echo "========== BUILD FINISHED =========="
+              echo "===== BUILD OUTPUTS ====="
 
-              echo "Checking generated files..."
+              if [ -d bin/plugins ]; then
+                find bin/plugins -maxdepth 4 -type f -print
+              fi
 
-              find /workspace \
-                -type f \
-                -iname "*.prx" \
-                -not -path "*/.git/*" \
-                -not -path "*/GoldHEN_Plugins_SDK/*" \
-                -not -path "*/dist/*" \
+              find . -type f -iname "*.prx" \
+                ! -path "./.git/*" \
+                ! -path "./GoldHEN_Plugins_SDK/*" \
+                ! -path "./dist/*" \
                 -print
 
-            '
+            ' 2>&1 | tee build.log
 
-      # ==========================================
-      # 6. Find and normalize compiled PRX
-      # ==========================================
-      - name: Collect PRX
+      # 6. Locate and normalize the PRX
+      - name: Collect Fortnite PRX
         shell: bash
         run: |
           set -euo pipefail
 
-          rm -rf dist
           mkdir -p dist
 
           mapfile -d "" PRX_FILES < <(
-            find . \
-              -type f \
-              -iname "*.prx" \
-              -not -path "./.git/*" \
-              -not -path "./GoldHEN_Plugins_SDK/*" \
-              -not -path "./dist/*" \
+            find . -type f -iname "*.prx" \
+              ! -path "./.git/*" \
+              ! -path "./GoldHEN_Plugins_SDK/*" \
+              ! -path "./dist/*" \
               -print0
           )
 
-          echo "========== GENERATED PRX FILES =========="
-
+          echo "===== FOUND PRX FILES ====="
           printf '%s\n' "${PRX_FILES[@]}"
 
           if [ "${#PRX_FILES[@]}" -eq 0 ]; then
-            echo "::error::No PRX files were generated."
+            echo "::error::Build completed without producing a PRX."
+            echo "Inspect build.log and the bin directory."
+            find . -maxdepth 5 -type f -print
             exit 1
           fi
 
           SELECTED=""
+          MATCHES=()
 
           for FILE in "${PRX_FILES[@]}"; do
             LOWER="${FILE,,}"
 
             if [[ "$LOWER" == *fortnite*.prx ]]; then
-              if [ -n "$SELECTED" ]; then
-                echo "::error::Multiple Fortnite PRX files found."
-                exit 1
-              fi
-
-              SELECTED="$FILE"
+              MATCHES+=("$FILE")
             fi
           done
 
-          if [ -z "$SELECTED" ]; then
-            if [ "${#PRX_FILES[@]}" -eq 1 ]; then
-              SELECTED="${PRX_FILES[0]}"
-            else
-              echo "::error::Multiple PRX files found; cannot identify the Fortnite plugin."
-              exit 1
-            fi
+          if [ "${#MATCHES[@]}" -eq 1 ]; then
+            SELECTED="${MATCHES[0]}"
+          elif [ "${#PRX_FILES[@]}" -eq 1 ]; then
+            SELECTED="${PRX_FILES[0]}"
+          else
+            echo "::error::Multiple PRX files found; cannot identify the Fortnite output."
+            exit 1
           fi
 
-          echo "Selected: $SELECTED"
-
-          install -m 0644 "$SELECTED" dist/FortnitePRX.prx
+          cp "$SELECTED" dist/FortnitePRX.prx
 
           test -s dist/FortnitePRX.prx
 
-          echo "========== FINAL FILE =========="
-
+          echo "===== FINAL ARTIFACT ====="
           ls -lh dist/FortnitePRX.prx
           sha256sum dist/FortnitePRX.prx
 
-      # ==========================================
-      # 7. Upload finished artifact
-      # ==========================================
+      # 7. Upload compiled plugin
       - name: Upload Fortnite PRX
         uses: actions/upload-artifact@v4
         with:
@@ -220,3 +190,13 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+      # 8. Always preserve compiler logs
+      - name: Upload Build Diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FortnitePRX-Build-Logs
+          path: build.log
+          if-no-files-found: warn
+          retention-days: 7
