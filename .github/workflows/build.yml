@@ -1,41 +1,36 @@
 name: Build PS4 PRX
 
-on:
-  push:
-  workflow_dispatch:
-
-permissions:
-  contents: read
+on: [push, workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - name: Checkout Repo
+      uses: actions/checkout@v4
 
-      - name: Clone GoldHEN SDK
-        run: |
-          git clone --depth 1 https://github.com/GoldHEN/GoldHEN_Plugins_SDK.git "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK"
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake clang lld
 
-      - name: Build PRX
-        uses: OpenOrbis/toolchain-action@main
-        with:
-          version: latest
-          command: make
+    - name: Clone OpenOrbis Toolchain
+      run: |
+        git clone https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git /opt/OpenOrbis-PS4-Toolchain
+        sudo chmod -R 777 /opt/OpenOrbis-PS4-Toolchain
 
-      - name: Check PRX Output
-        run: |
-          find . -type f -name "*.prx" -print
-          if ! find . -type f -name "*.prx" -print -quit | grep -q .; then
-            echo "::error::No PRX files were generated."
-            exit 1
-          fi
+    - name: Clone GoldHEN SDK
+      run: |
+        git clone https://github.com/GoldHEN/GoldHEN_Plugins_SDK.git
 
-      - name: Upload PRX
-        uses: actions/upload-artifact@v4
-        with:
-          name: FortnitePRX
-          path: '**/*.prx'
-          if-no-files-found: error
+    - name: Build PRX
+      env:
+        OO_PS4_TOOLCHAIN: /opt/OpenOrbis-PS4-Toolchain
+      run: make
+
+    - name: Upload PRX
+      uses: actions/upload-artifact@v4
+      with:
+        name: FortnitePRX
+        path: FortnitePRX.prx
+        if-no-files-found: error
