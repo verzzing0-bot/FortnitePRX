@@ -12,11 +12,9 @@ jobs:
     - name: Clone GoldHEN SDK
       run: git clone https://github.com/GoldHEN/GoldHEN_Plugins_SDK.git
 
-    - name: Build PRX
-      uses: OpenOrbis/toolchain-action@main
-      with:
-        version: latest
-        command: make
+    - name: Build with OpenOrbis Docker
+      run: |
+        docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/openorbis/openorbis-ps4-toolchain:latest make
 
     - name: Upload PRX
       uses: actions/upload-artifact@v4
