@@ -1,0 +1,5 @@
+{
+  "aim": { "enabled": true, "silent": false, "triggerbot": false, "bone": 0, "fov": 150.0, "smooth": 5.0 },
+  "visuals": { "box": true, "snapline": true, "skeleton": false, "distance": true, "name": true },
+  "exploits": { "no_spread": true, "rapid_fire": true, "speed_hack": false, "inf_ammo": false, "no_recoil": true }
+}
