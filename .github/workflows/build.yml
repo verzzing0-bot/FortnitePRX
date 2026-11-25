@@ -2,29 +2,35 @@ name: Build PS4 PRX
 
 on: [push, workflow_dispatch]
 
-permissions:
-  contents: read
-
 jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout Repository
+      - name: Checkout Project
         uses: actions/checkout@v4
 
-      - name: Clone GoldHEN SDK
+      - name: Clone GoldHEN SDK into Makefile Path
         uses: actions/checkout@v4
         with:
           repository: GoldHEN/GoldHEN_Plugins_SDK
           path: GoldHEN_Plugins_SDK
 
+      - name: Verify Project Structure
+        run: |
+          echo "=== Root ==="
+          ls -la
+          echo "=== SDK Directory ==="
+          ls -la GoldHEN_Plugins_SDK
+          echo "=== Makefile Check ==="
+          test -f Makefile
+
       - name: Build PRX with OpenOrbis Toolchain
         uses: OpenOrbis/toolchain-action@main
         with:
-          version: latest
+          version: v0.5.4
           command: make
 
-      - name: Locate PRX Output
+      - name: Locate and Verify PRX
         run: |
           find . -type f -name "*.prx" -print
           if [ ! -f FortnitePRX.prx ]; then
@@ -32,7 +38,7 @@ jobs:
             exit 1
           fi
 
-      - name: Upload PRX
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: FortnitePRX
