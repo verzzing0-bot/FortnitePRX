@@ -1,4 +1,3 @@
-
 name: Build PS4 PRX
 
 on:
@@ -20,25 +19,15 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/GoldHEN/GoldHEN_Plugins_SDK.git "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK"
 
-      - name: Verify Build Environment
-        run: |
-          echo "Workspace: $GITHUB_WORKSPACE"
-          echo "SDK directory:"
-          ls -la "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK"
-          echo "Project Makefile:"
-          test -f Makefile
-
       - name: Build PRX
         uses: OpenOrbis/toolchain-action@main
         with:
-          version: v0.5.1
-          command: 'export GOLDHEN_SDK="$PWD/GoldHEN_Plugins_SDK"; make'
+          version: latest
+          command: make
 
       - name: Check PRX Output
         run: |
-          echo "Searching for compiled PRX files..."
           find . -type f -name "*.prx" -print
-
           if ! find . -type f -name "*.prx" -print -quit | grep -q .; then
             echo "::error::No PRX files were generated."
             exit 1
