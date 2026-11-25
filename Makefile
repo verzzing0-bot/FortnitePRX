@@ -1,30 +1,31 @@
 TOOLCHAIN = $(OO_PS4_TOOLCHAIN)
 CC        = $(TOOLCHAIN)/bin/orbis-clang
-LD        = $(TOOLCHAIN)/bin/orbis-ld
-CFLAGS    = -target x86_64-scei-ps4 -O2 -fPIC -Wall -Iinclude -Isource -IGoldHEN_Plugins_SDK/include
+
+# Added -IGoldHEN_Plugins_SDK/source so the SDK headers can be found
+CFLAGS    = -target x86_64-scei-ps4 -O2 -fPIC -Wall -D__ORBIS__ -std=gnu11
+CFLAGS   += -Iinclude -Isource -IGoldHEN_Plugins_SDK/include -IGoldHEN_Plugins_SDK/source
+
 LDFLAGS   = -target x86_64-scei-ps4 -shared
 
-SRC = source/entry.c \
-      source/core/hooks.c \
-      source/core/mem.c \
-      source/core/scanner.c \
-      source/overlay/draw.c \
-      source/overlay/font8x8.c \
-      source/overlay/menu.c \
-      source/features/feat_aim.c \
-      source/features/feat_visuals.c \
-      source/features/feat_exploits.c \
-      $(wildcard GoldHEN_Plugins_SDK/source/*.c)
+# Automatically find all our C files and the SDK C files
+OUR_SRC   = $(wildcard source/*.c source/core/*.c source/overlay/*.c source/features/*.c)
+SDK_SRC   = $(wildcard GoldHEN_Plugins_SDK/source/*.c)
+SRC       = $(OUR_SRC) $(SDK_SRC)
 
-OBJ = $(SRC:.c=.o)
+OBJ       = $(SRC:.c=.o)
 
 all: FortnitePRX.prx
 
+# Compile step
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
 
+# Link step
 FortnitePRX.prx: $(OBJ)
-	$(CC) $(LDFLAGS) $(OBJ) -o $@
+	@echo "Linking $@..."
+	@$(CC) $(LDFLAGS) $(OBJ) -o $@
+	@echo "Build complete: $@"
 
 clean:
-	rm -f $(OBJ) FortnitePRX.prx
+	@rm -f $(OBJ) FortnitePRX.prx
