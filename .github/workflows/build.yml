@@ -1,25 +1,52 @@
+
 name: Build PS4 PRX
 
-on: [push, workflow_dispatch]
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Clone GoldHEN SDK
-      run: git clone https://github.com/GoldHEN/GoldHEN_Plugins_SDK.git
+      - name: Clone GoldHEN SDK
+        run: |
+          git clone --depth 1 https://github.com/GoldHEN/GoldHEN_Plugins_SDK.git "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK"
 
-    - name: Build PRX
-      uses: OpenOrbis/toolchain-action@main
-      with:
-        version: latest
-        command: make
+      - name: Verify Build Environment
+        run: |
+          echo "Workspace: $GITHUB_WORKSPACE"
+          echo "SDK directory:"
+          ls -la "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK"
+          echo "Project Makefile:"
+          test -f Makefile
 
-    - name: Upload PRX
-      uses: actions/upload-artifact@v4
-      with:
-        name: FortnitePRX
-        path: FortnitePRX.prx
+      - name: Build PRX
+        uses: OpenOrbis/toolchain-action@main
+        with:
+          version: v0.5.1
+          command: 'export GOLDHEN_SDK="$PWD/GoldHEN_Plugins_SDK"; make'
+
+      - name: Check PRX Output
+        run: |
+          echo "Searching for compiled PRX files..."
+          find . -type f -name "*.prx" -print
+
+          if ! find . -type f -name "*.prx" -print -quit | grep -q .; then
+            echo "::error::No PRX files were generated."
+            exit 1
+          fi
+
+      - name: Upload PRX
+        uses: actions/upload-artifact@v4
+        with:
+          name: FortnitePRX
+          path: '**/*.prx'
+          if-no-files-found: error
